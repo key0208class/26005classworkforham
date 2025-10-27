@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>📚 雲教室工作流程管理系統 V5.3.5 (阿翰專用即時同步版)</title>
+    <title>📚 雲教室工作流程管理系統 V5.3.6 (阿翰專用即時同步版)</title>
     <script src="https://cdn.tailwindcss.com"></script>
     
     <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-app-compat.js"></script>
@@ -74,6 +74,16 @@
         .close:hover {
             color: black;
         }
+        
+        /* [NEW V5.3.6] 音效開關樣式 */
+        input:checked ~ .block {
+            background-color: #2563eb; /* Tailwind blue-600 */
+        }
+
+        input:checked ~ .dot {
+            transform: translateX(20px);
+        }
+        /* [NEW V5.3.6] 樣式結束 */
     </style>
 </head>
 <body class="min-h-screen" style="background-image: url('https://class.kh.edu.tw/sites/30033/upload_file/4/cloud.jpg'); background-size: cover; background-position: center; background-attachment: fixed;">
@@ -143,7 +153,7 @@
                 </div>
                 
                 <div class="flex gap-2 mb-4">
-                    <input type="text" id="newSpecialWorkTitle" placeholder="額外任務標題" class="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500">
+                    <input type="text" id="newSpecialWorkTitle" placeholder="額外任務標標題" class="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500">
                     <button type="button" onclick="addSpecialWorkSetup()" class="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg font-bold">➕</button>
                 </div>
                 <div id="specialWorksSetupList" class="space-y-2 flex-grow overflow-y-auto max-h-[60vh]"></div>
@@ -217,9 +227,20 @@
                 </div>
 
                 <div class="bg-white rounded-xl shadow-lg p-6">
-                    <div class="flex flex-wrap justify-between items-center mb-6 gap-y-2">
+                    <div class="flex flex-wrap justify-between items-center mb-6 gap-y-4">
                         <h3 class="text-lg font-bold text-gray-800">👥 學生進度管理</h3>
-                        <div class="text-sm text-gray-600">
+
+                        <div class="flex items-center space-x-2">
+                            <span class="text-sm font-medium text-gray-700">🔊 點擊音效</span>
+                            <label for="soundToggle" class="flex items-center cursor-pointer">
+                                <div class="relative">
+                                    <input type="checkbox" id="soundToggle" class="sr-only" onchange="toggleClickSound(this.checked)" checked>
+                                    <div class="block bg-gray-300 w-12 h-7 rounded-full transition-colors"></div>
+                                    <div class="dot absolute left-1 top-1 bg-white w-5 h-5 rounded-full transition-transform"></div>
+                                </div>
+                            </label>
+                        </div>
+                        <div class="text-sm text-gray-600 w-full md:w-auto">
                             <span class="inline-block w-4 h-4 bg-red-300 rounded-full mr-1"></span> 未開始
                             <span class="inline-block w-4 h-4 bg-orange-300 rounded-full mr-1 ml-3"></span> 剩2項
                             <span class="inline-block w-4 h-4 bg-yellow-300 rounded-full mr-1 ml-3"></span> 剩1項
@@ -287,7 +308,10 @@
 
         const clickAudio = new Audio('https://taira-komori.net/sound_os2/game01/button01a.mp3');
         
+        // [MODIFIED V5.3.6] 修改點擊音效函式
         function playClickSound() {
+            // 檢查音效開關
+            if (!isClickSoundEnabled) return;
             clickAudio.currentTime = 0; 
             clickAudio.play().catch(e => console.log('音效播放失敗:', e));
         }
@@ -302,6 +326,10 @@
         const specialWorkMarkers = ['⭐', '📌', '🛡️', '❤️', '💎', '💡', '🔥', '💧', '🔔'];
         
         let isUpdatingFromFirestore = false; 
+
+        // [NEW V5.3.6] 新增旗標
+        let deadlineAudioPlayed = false; // 截止音效是否已播放
+        let isClickSoundEnabled = true;  // 點擊音效開關
 
         function loadSavedData() {
             const saved = localStorage.getItem('cloudClassroomSetup');
@@ -360,6 +388,24 @@
             localStorage.setItem('cloudClassroomSetup', JSON.stringify(setupData));
         }
 
+        // [NEW V5.3.6] 新增：切換點擊音效
+        function toggleClickSound(isEnabled) {
+            isClickSoundEnabled = isEnabled;
+            // 讓使用者知道設定已生效
+            const statusEl = document.getElementById("syncStatus");
+            if (statusEl) {
+                if (isEnabled) {
+                    statusEl.textContent = "🔊 音效已開啟";
+                    playClickSound(); // 播放一下作為範例
+                } else {
+                    statusEl.textContent = "🔇 音效已關閉";
+                }
+            }
+            
+            // 將設定儲存到 localStorage，這樣下次重載頁面時會記住
+            localStorage.setItem('isClickSoundEnabled', isEnabled.toString());
+        }
+
         function startWorkflow() {
             const title = document.getElementById('workTitle').value;
             const classSize = parseInt(document.getElementById('classSize').value);
@@ -414,6 +460,9 @@
                     }
                 });
             });
+
+            // [NEW V5.3.6] 重設音效旗標
+            deadlineAudioPlayed = false;
 
             if (db) {
                 const sessionRef = db.collection("liveSession").doc("current");
@@ -512,7 +561,14 @@
         }
 
 
+        // [MODIFIED V5.3.6] 修改 initWorkPage 函式
         function initWorkPage() {
+            // 初始化時，同步音效開關的勾選狀態
+            const soundToggle = document.getElementById('soundToggle');
+            if (soundToggle) {
+                soundToggle.checked = isClickSoundEnabled;
+            }
+
             initializeFirestoreListener();
         }
 
@@ -851,6 +907,8 @@
                 countdownEl.classList.remove('float-animation');
             }
         }
+        
+        // [MODIFIED V5.3.6] 修正 updateCountdown 函式
         function updateCountdown() {
             const now = new Date();
             
@@ -866,9 +924,15 @@
             if (timeLeft <= 0) {
                 clearInterval(countdownInterval);
                 if (oneMinAudio) { oneMinAudio.pause(); oneMinAudio.currentTime = 0; }
-                const endAudio = new Audio('https://taira-komori.net/sound_os2/electric01/clock_bell.mp3');
-                endAudio.play().catch(e => console.log('音效播放失敗:', e));
-                setTimeout(() => { endAudio.pause(); endAudio.currentTime = 0; }, 5000);
+
+                // 檢查旗標，只播放一次截止音效
+                if (!deadlineAudioPlayed) {
+                    deadlineAudioPlayed = true; // 標記為已播放
+                    const endAudio = new Audio('https://taira-komori.net/sound_os2/electric01/clock_bell.mp3');
+                    endAudio.play().catch(e => console.log('音效播放失敗:', e));
+                    setTimeout(() => { endAudio.pause(); endAudio.currentTime = 0; }, 5000);
+                }
+
                 displayTimeUpMessage();
                 return;
             }
@@ -1219,6 +1283,13 @@
                 savedConfigurations=JSON.parse(saved);
                 updateSavedConfigurationsDisplay()
             }
+
+            // [NEW V5.3.6] 載入音效開關設定
+            const savedSoundSetting = localStorage.getItem('isClickSoundEnabled');
+            if (savedSoundSetting !== null) {
+                isClickSoundEnabled = (savedSoundSetting === 'true');
+            }
+            // (開關的 UI 狀態會在 initWorkPage() 中被設定)
             
             // 呼叫新函式來檢查 Firebase
             checkExistingSession();
